@@ -34,6 +34,7 @@ jobs:
       SOURCE_COMMIT: ${{ inputs.source_commit }}
       VALIDATION: ${{ inputs.validation }}
       IMAGE: ghcr.io/xiaoshao9704/vaultwarden
+      BASE_VERSION: "1.37.3"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -74,8 +75,8 @@ jobs:
             revision="$(docker image inspect "$IMAGE@$child" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
             [[ "$revision" == "$SOURCE_COMMIT" ]]
           done < children.txt
-      - name: Publish latest and passkey-alpine aliases without rebuilding
+      - name: Publish versioned passkey alias without rebuilding
         run: |
           docker buildx imagetools create \
-            --tag "$IMAGE:latest" --tag "$IMAGE:passkey-alpine" "$IMAGE@$DIGEST"
-          echo "Promoted \`$IMAGE@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+            --tag "$IMAGE:${BASE_VERSION}-passkey" "$IMAGE@$DIGEST"
+          echo "Promoted \`$IMAGE@$DIGEST\` as \`$IMAGE:${BASE_VERSION}-passkey\`" >> "$GITHUB_STEP_SUMMARY"
