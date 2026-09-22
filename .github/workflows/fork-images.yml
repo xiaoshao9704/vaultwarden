@@ -15,7 +15,7 @@ env:
 
 concurrency:
   group: fork-passkey-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   build:
