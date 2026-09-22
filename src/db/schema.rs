@@ -361,6 +361,7 @@ table! {
         encrypted_user_key -> Nullable<Text>,
         encrypted_public_key -> Nullable<Text>,
         encrypted_private_key -> Nullable<Text>,
+        credential_id_hash -> Nullable<Text>,
     }
 }
 
@@ -424,3 +425,11 @@ allow_tables_to_appear_in_same_query!(
     auth_requests,
     webauthn_credentials,
 );
+
+table! {
+    webauthn_challenges (id) {
+        id -> Text,
+        state -> Text,
+        expires_at -> BigInt,
+    }
+}

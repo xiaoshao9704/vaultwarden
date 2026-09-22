@@ -118,6 +118,21 @@ impl TwoFactor {
         }
     }
 
+    /// Consume exactly the registration challenge that was read, at most once.
+    pub async fn consume_passkey_registration(self, conn: &DbConn) -> crate::api::ApiResult<bool> {
+        conn.run(move |conn| {
+            let deleted = diesel::delete(
+                twofactor::table
+                    .filter(twofactor::uuid.eq(self.uuid))
+                    .filter(twofactor::atype.eq(TwoFactorType::WebauthnPasskeyRegisterChallenge as i32))
+                    .filter(twofactor::data.eq(self.data)),
+            )
+            .execute(conn)?;
+            Ok(deleted == 1)
+        })
+        .await
+    }
+
     pub async fn delete(self, conn: &DbConn) -> EmptyResult {
         conn.run(move |conn| {
             diesel::delete(twofactor::table.filter(twofactor::uuid.eq(self.uuid)))

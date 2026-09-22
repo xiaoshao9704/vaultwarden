@@ -42,3 +42,6 @@ pub use self::two_factor_duo_context::TwoFactorDuoContext;
 pub use self::two_factor_incomplete::TwoFactorIncomplete;
 pub use self::user::{Invitation, SsoUser, User, UserId, UserKdfType, UserStampException};
 pub use self::webauthn_credential::{WebauthnCredential, WebauthnCredentialId, WebauthnCredentialPrfStatus};
+
+mod webauthn_challenge;
+pub use webauthn_challenge::WebauthnChallenge;

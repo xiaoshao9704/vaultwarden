@@ -20,7 +20,6 @@ use rocket::{
     outcome::try_outcome,
     request::{FromRequest, Outcome, Request},
 };
-use webauthn_rs::prelude::PasskeyAuthentication;
 
 use crate::{
     CONFIG,
@@ -342,24 +341,20 @@ pub fn generate_invite_claims(
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PasswordlessJwtClaims {
-    // Not before
     pub nbf: i64,
-    // Expiration time
     pub exp: i64,
-    // Issuer
     pub iss: String,
-
-    pub state: PasskeyAuthentication,
+    // An opaque reference only. Authentication state is never sent to the client.
+    pub jti: String,
 }
 
-pub fn generate_passwordless_claims(state: PasskeyAuthentication) -> PasswordlessJwtClaims {
-    let time_now = Utc::now();
-    let expire_hours = i64::from(CONFIG.invitation_expiration_hours());
+pub fn generate_passwordless_claims(jti: String) -> PasswordlessJwtClaims {
+    let now = Utc::now().timestamp();
     PasswordlessJwtClaims {
-        nbf: time_now.timestamp(),
-        exp: (time_now + TimeDelta::try_hours(expire_hours).unwrap()).timestamp(),
+        nbf: now,
+        exp: now + 120,
         iss: JWT_PASSWORDLESS_ISSUER.to_string(),
-        state,
+        jti,
     }
 }
 
@@ -1369,6 +1364,9 @@ pub async fn refresh_tokens(
         }
         AuthMethod::Sso => err!("SSO is now disabled, Login again using email and master password"),
         AuthMethod::Password if CONFIG.sso_enabled() && CONFIG.sso_only() => err!("SSO is now required, Login again"),
+        AuthMethod::Webauthn if !CONFIG.passkey_login_allowed() || (CONFIG.sso_enabled() && CONFIG.sso_only()) => {
+            err!("Passkey login is no longer available; authenticate using an allowed method")
+        }
         AuthMethod::Password | AuthMethod::Webauthn => AuthTokens::new(&device, &user, refresh_claims.sub, client_id),
         _ => err!("Invalid auth method, cannot refresh token"),
     };

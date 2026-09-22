@@ -919,6 +919,18 @@ async fn post_rotatekey(data: Json<KeyData>, headers: Headers, conn: DbConn, nt:
     Cipher::validate_cipher_data(&data.account_data.ciphers)?;
 
     let user_id = &headers.user.uuid;
+    // This fork targets one Vaultwarden process, not multiple replicas sharing a DB.
+    let _key_mutation = crate::db::models::WebauthnCredential::lock_account_key_mutation().await;
+    let Some(current_user) = crate::db::models::User::find_by_uuid(user_id, &conn).await else {
+        err!("User not found")
+    };
+    if current_user.security_stamp != headers.user.security_stamp {
+        err!("Account changed; authenticate again before rotating account keys")
+    }
+    // Full PRF key rewrapping is not implemented. Refuse BEFORE any writes.
+    if crate::db::models::WebauthnCredential::has_any_by_user(user_id, &conn).await? {
+        err!("Remove login passkeys before rotating the account encryption key, then re-enroll them")
+    }
 
     // TODO: Ideally we'd do everything after this point in a single transaction.
 

@@ -1,0 +1,81 @@
+name: Promote a validated passkey image
+on:
+  workflow_dispatch:
+    inputs:
+      digest:
+        description: 'Validated multi-platform manifest digest, sha256:...'
+        required: true
+        type: string
+      source_commit:
+        description: 'Full 40-character reviewed source commit'
+        required: true
+        type: string
+      validation:
+        description: 'Type WEB_AUTHN_AND_REAL_DATA_UPGRADE_TESTED only after completing the checklist'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: passkey-production-image-promotion
+  cancel-in-progress: false
+jobs:
+  promote:
+    if: github.repository == 'xiaoshao9704/vaultwarden'
+    runs-on: ubuntu-24.04
+    # Configure required reviewers for this environment before using it.
+    # Merely naming the environment does NOT install an approval protection rule.
+    environment: production-images
+    permissions:
+      contents: read
+      packages: write
+    env:
+      DIGEST: ${{ inputs.digest }}
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      VALIDATION: ${{ inputs.validation }}
+      IMAGE: ghcr.io/xiaoshao9704/vaultwarden
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate inputs and reviewed-branch ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          [[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$VALIDATION" == WEB_AUTHN_AND_REAL_DATA_UPGRADE_TESTED ]]
+          git merge-base --is-ancestor "$SOURCE_COMMIT" origin/passkey-pr7370
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify both platform images refer to the reviewed source
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "$IMAGE@$DIGEST" --raw > manifest.json
+          python3 - <<'PY'
+          import json
+          manifest = json.load(open('manifest.json'))
+          children = manifest['manifests']
+          assert len(children) == 2
+          assert {(x['platform']['os'], x['platform']['architecture']) for x in children} == {('linux','amd64'), ('linux','arm64')}
+          with open('children.txt', 'w') as out:
+              for x in children:
+                  out.write(x['platform']['architecture'] + ' ' + x['digest'] + '\n')
+          PY
+          while read -r arch child; do
+            [[ "$child" =~ ^sha256:[a-f0-9]{64}$ ]]
+            docker pull --platform "linux/$arch" "$IMAGE@$child"
+            revision="$(docker image inspect "$IMAGE@$child" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')"
+            [[ "$revision" == "$SOURCE_COMMIT" ]]
+          done < children.txt
+      - name: Publish latest and passkey-alpine aliases without rebuilding
+        run: |
+          docker buildx imagetools create \
+            --tag "$IMAGE:latest" --tag "$IMAGE:passkey-alpine" "$IMAGE@$DIGEST"
+          echo "Promoted \`$IMAGE@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
