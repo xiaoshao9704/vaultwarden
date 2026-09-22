@@ -1483,7 +1483,7 @@ async fn get_webauthn_assertion_options(conn: DbConn, ip: ClientIp) -> JsonResul
     }
     crate::ratelimit::check_limit_login(&ip.ip)?;
     let (response, state) = WEBAUTHN_PASSWORDLESS.start_discoverable_authentication()?;
-    let claims = generate_passwordless_claims(crate::util::get_uuid());
+    let claims = generate_passwordless_claims(util::get_uuid());
     crate::db::models::WebauthnChallenge::save(&claims.jti, &serde_json::to_string(&state)?, claims.exp, &conn).await?;
     Ok(Json(json!({
         "options": serde_json::to_value(response.public_key)?,
