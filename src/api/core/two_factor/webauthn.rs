@@ -157,7 +157,11 @@ async fn generate_webauthn_challenge(data: Json<PasswordOrOtpData>, headers: Hea
     // we need to modify some of the default settings defined by `start_passkey_registration()`.
     challenge.public_key.extensions = None;
     if let Some(asc) = challenge.public_key.authenticator_selection.as_mut() {
+        // Match Bitwarden's WebAuthn 2FA semantics explicitly: this credential is
+        // a second factor, not a discoverable passwordless-login credential.
         asc.user_verification = UserVerificationPolicy::Discouraged_DO_NOT_USE;
+        asc.require_resident_key = false;
+        asc.resident_key = Some(webauthn_rs_proto::ResidentKeyRequirement::Discouraged);
     }
 
     let mut challenge_value = serde_json::to_value(challenge.public_key)?;
