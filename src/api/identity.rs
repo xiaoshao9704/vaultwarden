@@ -571,35 +571,7 @@ async fn webauthn_login(data: ConnectData, user_id: &mut Option<UserId>, conn: &
         }
     }
     let Some((record, mut passkey)) = matched else {
-        // A discoverable credential registered for WebAuthn 2FA can still appear
-        // in the browser's accountless passkey picker. Keep the two security
-        // purposes separate, but make the server log explain the mismatch.
-        let is_two_factor_credential = webauthn::get_webauthn_registrations(&user.uuid, conn)
-            .await?
-            .1
-            .iter()
-            .any(|registration| crypto::ct_eq(registration.credential.cred_id().as_slice(), credential_id));
-
-        if is_two_factor_credential {
-            err!(
-                "Passkey authentication failed",
-                format!(
-                    "IP: {}. Username: {}. Credential is registered for WebAuthn 2FA only; enroll a separate login passkey.",
-                    ip.ip, user.email
-                ),
-                ErrorEvent {
-                    event: EventType::UserFailedLogIn
-                }
-            )
-        }
-
-        err!(
-            "Passkey authentication failed",
-            format!("IP: {}. Username: {}. Credential is not registered for passkey login.", ip.ip, user.email),
-            ErrorEvent {
-                event: EventType::UserFailedLogIn
-            }
-        )
+        err!("Passkey authentication failed")
     };
     let keys = [DiscoverableKey::from(&passkey)];
     let result = WEBAUTHN_PASSWORDLESS.finish_discoverable_authentication(&device_response, state, &keys)?;
