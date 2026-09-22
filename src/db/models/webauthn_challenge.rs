@@ -39,7 +39,7 @@ impl WebauthnChallenge {
                 .optional()?;
             let Some(state) = state else { return Ok(None); };
 
-            // DELETE is the linearization point. Two concurrent SELECTs are harmless:
+            // DELETE is the linearization point. Two concurrent reads are harmless:
             // only the request that actually deletes one row receives the state.
             // Recheck the wall clock after SELECT, not just when the request started.
             let deleted = diesel::delete(

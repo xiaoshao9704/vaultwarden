@@ -2,7 +2,7 @@ name: Fork passkey candidate images
 
 on:
   push:
-    branches: [passkey-pr7370]
+    branches: [passkey-pr7370, main]
   pull_request:
     branches: [passkey-pr7370]
   workflow_dispatch:
@@ -116,8 +116,12 @@ jobs:
           image="ghcr.io/${SOURCE_REPOSITORY,,}"
           short="${SOURCE_COMMIT:0:12}"
           tag="${BASE_VERSION}-passkey-${short}"
+          extra_tag=()
+          if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            extra_tag=(--tag "$image:${BASE_VERSION}-passkey")
+          fi
           docker buildx imagetools create \
-            --tag "$image:$tag" \
+            --tag "$image:$tag" "${extra_tag[@]}" \
             "$image:$tag-amd64" "$image:$tag-arm64"
           docker buildx imagetools inspect "$image:$tag"
           docker buildx imagetools inspect "$image:$tag" --raw > manifest.json
@@ -128,7 +132,10 @@ jobs:
           assert platforms == {('linux', 'amd64'), ('linux', 'arm64')}, platforms
           PY
           {
-            echo "### Multi-platform ${BASE_VERSION} passkey candidate"
+            echo "### Multi-platform ${BASE_VERSION} passkey image"
             echo "\`$image:$tag\`"
-            echo 'Pin its manifest digest for deployment. Do not upgrade production before browser and real-data validation.'
+            if [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+              echo "Stable alias: \`$image:${BASE_VERSION}-passkey\`"
+            fi
+            echo 'Pin the manifest digest for rollback-safe deployment.'
           } >> "$GITHUB_STEP_SUMMARY"
