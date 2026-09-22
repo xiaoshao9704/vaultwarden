@@ -921,7 +921,7 @@ async fn post_rotatekey(data: Json<KeyData>, headers: Headers, conn: DbConn, nt:
     let user_id = &headers.user.uuid;
     // This fork targets one Vaultwarden process, not multiple replicas sharing a DB.
     let _key_mutation = crate::db::models::WebauthnCredential::lock_account_key_mutation().await;
-    let Some(current_user) = crate::db::models::User::find_by_uuid(user_id, &conn).await else {
+    let Some(current_user) = User::find_by_uuid(user_id, &conn).await else {
         err!("User not found")
     };
     if current_user.security_stamp != headers.user.security_stamp {
