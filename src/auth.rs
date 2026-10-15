@@ -352,7 +352,8 @@ pub fn generate_passwordless_claims(jti: String) -> PasswordlessJwtClaims {
     let now = Utc::now().timestamp();
     PasswordlessJwtClaims {
         nbf: now,
-        exp: now + 120,
+        // Match bitwarden/server WebAuthnLoginAssertionOptionsTokenable (17 minutes).
+        exp: now + crate::db::models::ASSERTION_CHALLENGE_TTL_SECS,
         iss: JWT_PASSWORDLESS_ISSUER.to_string(),
         jti,
     }

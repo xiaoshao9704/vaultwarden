@@ -1,5 +1,18 @@
 //! Short-lived, single-use passwordless authentication state.
 //! Candidate implementation: run Rust and database integration tests before release.
+//!
+//! Lifetimes mirror bitwarden/server tokenables:
+//! - Assertion options token: 17 minutes (`WebAuthnLoginAssertionOptionsTokenable.TokenLifeTime`)
+//! - Registration create options token: 7 minutes (`WebAuthnCredentialCreateOptionsTokenable`)
+//! - Client WebAuthn timeout budget: 6 minutes (Bitwarden's documented max WebAuthn timeout)
+
+/// Server-side assertion challenge + passwordless JWT lifetime (seconds).
+pub const ASSERTION_CHALLENGE_TTL_SECS: i64 = 17 * 60;
+/// Server-side registration challenge envelope lifetime (seconds).
+pub const REGISTRATION_CHALLENGE_TTL_SECS: i64 = 7 * 60;
+/// WebAuthn client ceremony timeout advertised in options (seconds).
+pub const WEBAUTHN_CLIENT_TIMEOUT_SECS: u64 = 6 * 60;
+
 use diesel::prelude::*;
 
 use crate::{

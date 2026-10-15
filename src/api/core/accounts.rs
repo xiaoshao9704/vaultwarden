@@ -23,6 +23,7 @@ use crate::{
             AuthRequest, AuthRequestId, Cipher, CipherId, Device, DeviceId, DeviceType, DeviceWithAuthRequest,
             EmergencyAccess, EmergencyAccessId, EventType, Folder, FolderId, Invitation, Membership, MembershipId,
             OrgPolicy, OrgPolicyType, Organization, OrganizationId, Send, SendId, User, UserId, UserKdfType,
+            WebauthnCredential, WebauthnCredentialId, WebauthnCredentialPrfStatus,
         },
     },
     mail,
@@ -796,6 +797,18 @@ struct RotateAccountUnlockData {
     emergency_access_unlock_data: Vec<UpdateEmergencyAccessData>,
     master_password_unlock_data: MasterPasswordUnlockData,
     organization_account_recovery_unlock_data: Vec<UpdateResetPasswordData>,
+    /// Bitwarden clients send `passkeyUnlockData` with rewrapped PRF keys.
+    /// Default empty keeps older payloads working when the user has no PRF passkeys.
+    #[serde(default)]
+    passkey_unlock_data: Vec<RotatePasskeyUnlockData>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RotatePasskeyUnlockData {
+    id: WebauthnCredentialId,
+    encrypted_user_key: String,
+    encrypted_public_key: String,
 }
 
 #[derive(Deserialize)]
@@ -920,17 +933,23 @@ async fn post_rotatekey(data: Json<KeyData>, headers: Headers, conn: DbConn, nt:
 
     let user_id = &headers.user.uuid;
     // This fork targets one Vaultwarden process, not multiple replicas sharing a DB.
-    let _key_mutation = crate::db::models::WebauthnCredential::lock_account_key_mutation().await;
+    let _key_mutation = WebauthnCredential::lock_account_key_mutation().await;
     let Some(current_user) = User::find_by_uuid(user_id, &conn).await else {
         err!("User not found")
     };
     if current_user.security_stamp != headers.user.security_stamp {
         err!("Account changed; authenticate again before rotating account keys")
     }
-    // Full PRF key rewrapping is not implemented. Refuse BEFORE any writes.
-    if crate::db::models::WebauthnCredential::has_any_by_user(user_id, &conn).await? {
-        err!("Remove login passkeys before rotating the account encryption key, then re-enroll them")
-    }
+
+    let existing_passkeys = WebauthnCredential::find_all_by_user_checked(user_id, &conn).await?;
+    let passkey_rotation_payload: Vec<(WebauthnCredentialId, String, String)> = data
+        .account_unlock_data
+        .passkey_unlock_data
+        .iter()
+        .map(|p| (p.id.clone(), p.encrypted_user_key.clone(), p.encrypted_public_key.clone()))
+        .collect();
+    // Mirror bitwarden/server WebAuthnLoginKeyRotationValidator: require rewrap for Enabled PRF keys.
+    WebauthnCredential::validate_prf_keys_for_rotation(&existing_passkeys, &passkey_rotation_payload)?;
 
     // TODO: Ideally we'd do everything after this point in a single transaction.
 
@@ -1012,6 +1031,24 @@ async fn post_rotatekey(data: Json<KeyData>, headers: Headers, conn: DbConn, nt:
             // We force the users to logout after the user has been saved to try and prevent these issues.
             update_cipher_from_data(saved_cipher, cipher_data, &headers, None, &conn, &nt, UpdateType::None).await?;
         }
+    }
+
+    // Update WebAuthn login passkey PRF wrap keys (EncryptedPrivateKey stays authenticator-bound).
+    for item in &data.account_unlock_data.passkey_unlock_data {
+        let Some(existing) = existing_passkeys.iter().find(|c| c.uuid == item.id) else {
+            continue;
+        };
+        if !matches!(existing.get_prf_status(), WebauthnCredentialPrfStatus::Enabled) {
+            continue;
+        }
+        WebauthnCredential::update_prf_wrap_keys(
+            &item.id,
+            user_id,
+            &item.encrypted_user_key,
+            &item.encrypted_public_key,
+            &conn,
+        )
+        .await?;
     }
 
     // Update user data

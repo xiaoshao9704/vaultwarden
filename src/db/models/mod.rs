@@ -44,4 +44,6 @@ pub use self::user::{Invitation, SsoUser, User, UserId, UserKdfType, UserStampEx
 pub use self::webauthn_credential::{WebauthnCredential, WebauthnCredentialId, WebauthnCredentialPrfStatus};
 
 mod webauthn_challenge;
-pub use webauthn_challenge::WebauthnChallenge;
+pub use webauthn_challenge::{
+    ASSERTION_CHALLENGE_TTL_SECS, REGISTRATION_CHALLENGE_TTL_SECS, WEBAUTHN_CLIENT_TIMEOUT_SECS, WebauthnChallenge,
+};

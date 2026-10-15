@@ -25,7 +25,7 @@ pub static WEBAUTHN_PASSWORDLESS: LazyLock<Webauthn> = LazyLock::new(|| {
     let mut builder = WebauthnBuilder::new(&rp_id, &origin)
         .expect("Creating WebAuthn builder failed")
         .rp_name(&domain)
-        .timeout(tokio::time::Duration::from_secs(120));
+        .timeout(tokio::time::Duration::from_secs(crate::db::models::WEBAUTHN_CLIENT_TIMEOUT_SECS));
     // Preserve the PR's exact official extension allowlist. Do not use a wildcard.
     for value in
         ["chrome-extension://nngceckbapebfimnlniiiahkandclblb", "chrome-extension://jbkfoedolllekgbhcbcoahefnbanhhlh"]
@@ -109,6 +109,12 @@ async fn post_webauthn_attestation_options(
         err!("Remove credentials created by the earlier experimental PR before enrolling new passkeys")
     }
     let all = WebauthnCredential::find_all_by_user_checked(&user.uuid, &conn).await?;
+    if all.len() >= WebauthnCredential::MAX_CREDENTIALS_PER_USER {
+        err!(
+            "Maximum number of login passkeys reached",
+            format!("Limit is {} passkeys per account", WebauthnCredential::MAX_CREDENTIALS_PER_USER)
+        )
+    }
     let mut excluded = Vec::with_capacity(all.len());
     for record in all {
         let key: Passkey = serde_json::from_str(&record.credential)?;
@@ -132,7 +138,8 @@ async fn post_webauthn_attestation_options(
         extensions.min_pin_length = None;
     }
     let state = RegistrationChallenge {
-        expires_at: chrono::Utc::now().timestamp() + 120,
+        // Match bitwarden/server WebAuthnCredentialCreateOptionsTokenable (~7 minutes).
+        expires_at: chrono::Utc::now().timestamp() + crate::db::models::REGISTRATION_CHALLENGE_TTL_SECS,
         security_stamp: user.security_stamp.clone(),
         state,
     };
@@ -196,6 +203,13 @@ async fn post_webauthn(
     if WebauthnCredential::has_legacy_credentials(&conn).await? {
         err!("Remove credentials created by the earlier experimental PR before enrolling new passkeys")
     }
+    let existing_count = WebauthnCredential::find_all_by_user_checked(&user.uuid, &conn).await?.len();
+    if existing_count >= WebauthnCredential::MAX_CREDENTIALS_PER_USER {
+        err!(
+            "Maximum number of login passkeys reached",
+            format!("Limit is {} passkeys per account", WebauthnCredential::MAX_CREDENTIALS_PER_USER)
+        )
+    }
     let kind = TwoFactorType::WebauthnPasskeyRegisterChallenge as i32;
     let Some(saved) = TwoFactor::find_by_user_and_type(&user.uuid, kind, &conn).await else {
         err!("Registration challenge not found. Please start again.")
@@ -243,12 +257,25 @@ async fn post_webauthn_delete(
 #[cfg(test)]
 mod passkey_hardening_tests {
     use super::{challenge_is_live, valid_prf_material};
+    use crate::db::models::WebauthnCredential;
 
     #[test]
     fn challenge_expiry_is_strict() {
         assert!(challenge_is_live(101, 100));
         assert!(!challenge_is_live(100, 100));
         assert!(!challenge_is_live(99, 100));
+    }
+    #[test]
+    fn bitwarden_aligned_ttl_ordering() {
+        use crate::db::models::{
+            ASSERTION_CHALLENGE_TTL_SECS, REGISTRATION_CHALLENGE_TTL_SECS, WEBAUTHN_CLIENT_TIMEOUT_SECS,
+        };
+        assert_eq!(ASSERTION_CHALLENGE_TTL_SECS, 17 * 60);
+        assert_eq!(REGISTRATION_CHALLENGE_TTL_SECS, 7 * 60);
+        assert_eq!(WEBAUTHN_CLIENT_TIMEOUT_SECS, 6 * 60);
+        assert!(ASSERTION_CHALLENGE_TTL_SECS as u64 > WEBAUTHN_CLIENT_TIMEOUT_SECS);
+        assert!(REGISTRATION_CHALLENGE_TTL_SECS as u64 > WEBAUTHN_CLIENT_TIMEOUT_SECS);
+        assert_eq!(WebauthnCredential::MAX_CREDENTIALS_PER_USER, 5);
     }
     #[test]
     fn prf_material_must_be_consistent() {
