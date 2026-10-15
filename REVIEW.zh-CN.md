@@ -57,9 +57,9 @@
 
 原轮换处理更新用户密钥/密文，但没有对应的 Passkey key rewrapping，可能使 passkey 解锁持有过期加密密钥。不能靠“更换主密码成功”推断这条路径安全，因为主密码更换和账户加密密钥轮换不是同一个操作。
 
-候选采取保守限制：存在登录 passkey 时，先拒绝账户加密密钥轮换，用户须移除后再轮换、重新注册。注册完成与该轮换路径用同一进程级 async mutex 排序，并在锁后重查账户 security_stamp；注册挑战也绑定 stamp，避免先轮换后提交旧挑战。
+候选现已支持与官方接近的 PRF rewrap：轮换请求携带 `passkeyUnlockData`，校验所有 PRF Enabled 凭据并更新 `encrypted_user_key` / `encrypted_public_key`（保留 authenticator 侧的 `encrypted_private_key`）。注册完成与该轮换路径仍用同一进程级 async mutex 排序，并在锁后重查账户 security_stamp；注册挑战也绑定 stamp。
 
-**这不是完整 PRF 密钥轮换实现，也不是分布式锁。候选仅面向单个 Vaultwarden 进程；不能宣称支持多个副本共享数据库。** 所有其他可能修改用户密钥的路径（密码重置、紧急接管等）仍须在端到端矩阵中验证。真实密码库上线前，这些验收不可跳过。
+**这仍不是分布式锁。候选仅面向单个 Vaultwarden 进程；不能宣称支持多个副本共享数据库。** 密码重置、紧急接管等其他改密钥路径仍须在端到端矩阵中验证。真实密码库上线前，这些验收不可跳过。
 
 ### P2：注册请求覆盖算法/UV 参数，容易与库保存的状态不一致
 
@@ -94,3 +94,20 @@ CI 中的迁移测试只使用官方 1.37.3 初始化的合成空库和哨兵文
 - 上游 release workflow：https://github.com/dani-garcia/vaultwarden/blob/1.37.3/.github/workflows/release.yml
 - webauthn-rs 0.5.5 文档（检索时 latest 指向该版本）：https://docs.rs/webauthn-rs/latest/webauthn_rs/struct.Webauthn.html
 - Docker 多平台构建官方文档：https://docs.docker.com/build/ci/github-actions/multi-platform/
+
+## Bitwarden 对齐进展（2026-10-15）
+
+在保持服务端一次性挑战（不把完整认证 state 塞回 JWT）的前提下，已做以下官方行为对齐：
+
+1. **挑战 TTL**：断言/passwordless JWT ≈ **17 分钟**；注册 envelope ≈ **7 分钟**；WebAuthn 客户端 timeout ≈ **6 分钟**（对齐 `WebAuthnLoginAssertionOptionsTokenable` / `WebAuthnCredentialCreateOptionsTokenable` / 官方 max WebAuthn timeout）。常量见 `src/db/models/webauthn_challenge.rs`。
+2. **每用户最多 5 个登录 passkey**：对齐 `CreateWebAuthnLoginCredentialCommand.MaxCredentialsPerUser`；在 attestation-options 与完成注册两处检查。
+3. **账户密钥轮换 + PRF rewrap**：不再在有 passkey 时一律拒绝。`passkeyUnlockData`（`id` + `encryptedUserKey` + `encryptedPublicKey`）按 `WebAuthnLoginKeyRotationValidator` 语义校验：所有 **PRF Enabled** 凭据必须带齐非空 rewrap 键；更新 wrap 键时保留 `encrypted_private_key`（由 authenticator PRF 保护）。非 Enabled / 无 PRF 凭据不强制出现在 payload。
+
+仍刻意保留：UV Required；登录 passkey 与 WebAuthn 2FA 注册语义分离；`credential_id_hash` 全局唯一；挑战服务端一次性消费。
+
+### 仍待后续
+
+- **合入 / rebase Vaultwarden 1.37.4+**（含安全修复）：按计划单独做，本次未动。
+- **多实例**：挑战表 + 进程内 mutex 仍非分布式；官方用 distributed cache 标 challenge 已用。多副本共库前不要上线。
+- 端到端：真实 Web Vault / Chromium 扩展上的注册、登录、PRF 解锁、带 passkeyUnlockData 的密钥轮换验收（见 `E2E-CHECKLIST.md`）。
+- 组织级 Require SSO / Trusted Devices / Key Connector 等策略与官方完整 org policy 仍非一一对应（当前为 `PASSKEY_LOGIN_ALLOWED` + `SSO_ONLY`）。

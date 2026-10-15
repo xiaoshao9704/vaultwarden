@@ -42,3 +42,16 @@
 - [ ] GitHub package 拉取权限、production-images 审批规则、人工提升 digest 均已配置。
 
 完成后才能使用提升工作流中的 WEB_AUTHN_AND_REAL_DATA_UPGRADE_TESTED 确认字符串。该字符串只记录操作者声明，不是自动化测试证据。
+
+## Bitwarden parity notes (2026-10-15)
+
+Server-side changes for closer parity (still require real client evidence below):
+
+- [ ] Assertion challenge usable for ~17 minutes; registration challenge ~7 minutes; confirm slow hardware still completes within client 6-minute WebAuthn timeout.
+- [ ] Sixth login passkey registration is rejected with a clear error; five succeed.
+- [ ] Account encryption key rotation with one or more **PRF-enabled** passkeys succeeds when the client sends complete `passkeyUnlockData`; omitting an Enabled PRF passkey fails before writes.
+- [ ] After rotation, PRF unlock still decrypts vault items with each enabled passkey; `encryptedPrivateKey` rows were not blindly cleared.
+- [ ] Rotation with only non-PRF / PRF-disabled login passkeys still succeeds without `passkeyUnlockData` entries for those credentials.
+- [ ] Multi-instance / shared-DB deployment is **out of scope** until distributed challenge consumption exists; keep a single Vaultwarden process.
+- [ ] Rebase/merge onto Vaultwarden **1.37.4+** (security fixes) is deferred; track separately before production.
+
