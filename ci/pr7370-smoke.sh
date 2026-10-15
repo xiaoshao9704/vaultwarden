@@ -55,21 +55,46 @@ docker rm -f "$container" >/dev/null
 
 start_container "$IMAGE" true
 docker exec "$container" curl -fsS http://localhost/identity/accounts/webauthn/assertion-options > "${prefix}-challenge.json"
-python3 - "${prefix}-challenge.json" <<'PY'
-import base64, json, sys
+# Lifetime comes from ASSERTION_CHALLENGE_TTL_SECS (bitwarden/server
+# WebAuthnLoginAssertionOptionsTokenable.TokenLifeTime, 17 minutes).
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python3 - "${prefix}-challenge.json" "$repo_root/src/db/models/webauthn_challenge.rs" <<'PY'
+import base64, json, re, sys
 from pathlib import Path
-path = Path(sys.argv[1])
+
+def assertion_challenge_ttl_secs(source: str) -> int:
+    match = re.search(
+        r'pub const ASSERTION_CHALLENGE_TTL_SECS:\s*i64\s*=\s*([^;]+);',
+        source,
+    )
+    if match is None:
+        raise AssertionError('ASSERTION_CHALLENGE_TTL_SECS missing from webauthn_challenge.rs')
+    expr = ''.join(match.group(1).split())
+    factors = expr.split('*')
+    if not factors or any(not factor.isdigit() for factor in factors):
+        raise AssertionError(f'unsupported ASSERTION_CHALLENGE_TTL_SECS expression: {expr!r}')
+    ttl = 1
+    for factor in factors:
+        ttl *= int(factor)
+    return ttl
+
+challenge_path = Path(sys.argv[1])
 try:
-    response = json.loads(path.read_text())
+    response = json.loads(challenge_path.read_text())
     parts = response['token'].split('.')
     claims = json.loads(base64.urlsafe_b64decode(parts[1] + '=' * (-len(parts[1]) % 4)))
     assert 'state' not in claims, 'Server state leaked into JWT'
     assert isinstance(claims['jti'], str) and len(claims['jti']) >= 32
-    assert claims['exp'] - claims['nbf'] == 120
+    ttl = assertion_challenge_ttl_secs(Path(sys.argv[2]).read_text())
+    lifetime = claims['exp'] - claims['nbf']
+    assert lifetime == ttl, (
+        f'assertion JWT lifetime {lifetime}s != ASSERTION_CHALLENGE_TTL_SECS {ttl}s '
+        '(bitwarden/server WebAuthnLoginAssertionOptionsTokenable)'
+    )
     assert response['options']['userVerification'] == 'required'
     assert response['options'].get('allowCredentials', []) == []
 finally:
-    path.unlink(missing_ok=True)
+    challenge_path.unlink(missing_ok=True)
 PY
 # This only checks server challenge issuance and runtime compatibility.
 # Browser assertion verification, PRF decryption and replay E2E remain separate gates.
