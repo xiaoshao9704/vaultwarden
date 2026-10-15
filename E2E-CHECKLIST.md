@@ -4,7 +4,7 @@
 
 ## 源码和基础构建
 
-- [ ] 稳定版 1.37.3 与固定 PR feature diff 的冲突逐个解决，未丢失稳定版安全修复。
+- [ ] 稳定版 1.37.4 与固定 PR feature diff 的冲突逐个解决，未丢失稳定版安全修复。
 - [ ] 完整仓库补丁应用、cargo fmt、cargo test 通过；两个原生架构的构建、测试与启动均成功。
 - [ ] SQLite/MySQL/PostgreSQL 都通过实际数据库迁移/查询测试，而不只是编译多数据库 feature。
 - [ ] 实际 manifest 只包含 linux/amd64 与 linux/arm64；记录各架构 digest、manifest digest、源码 commit、构建 run。

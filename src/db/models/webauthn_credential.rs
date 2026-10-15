@@ -155,16 +155,13 @@ impl WebauthnCredential {
         }}
     }
 
-
     /// Mirror bitwarden/server `WebAuthnLoginKeyRotationValidator`:
     /// every PRF-Enabled login passkey must be present with non-empty rewrapped keys.
     pub fn validate_prf_keys_for_rotation(
         existing: &[Self],
         provided: &[(WebauthnCredentialId, String, String)],
     ) -> EmptyResult {
-        let enabled = existing
-            .iter()
-            .filter(|c| matches!(c.get_prf_status(), WebauthnCredentialPrfStatus::Enabled));
+        let enabled = existing.iter().filter(|c| matches!(c.get_prf_status(), WebauthnCredentialPrfStatus::Enabled));
         for cred in enabled {
             let Some((_, user_key, public_key)) = provided.iter().find(|(id, _, _)| id == &cred.uuid) else {
                 err!("All existing webauthn prf keys must be included in the rotation.")

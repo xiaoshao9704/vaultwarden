@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  BASE_VERSION: "1.37.3"
+  BASE_VERSION: "1.37.4"
 
 concurrency:
   group: fork-passkey-${{ github.ref }}

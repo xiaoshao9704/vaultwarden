@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 : "${IMAGE:?Set IMAGE to the locally built image}"
-: "${BASELINE_IMAGE:=vaultwarden/server:1.37.3}"
+: "${BASELINE_IMAGE:=vaultwarden/server:1.37.4}"
 prefix="vw-pr7370-${RANDOM}-$$"
 volume="${prefix}-data"
 container="${prefix}-server"

@@ -5,7 +5,7 @@
 - PR HEAD：`f7f2007f7bc0de870cb2d482467ab36072e3eed5`，来源 `RaphaelRoumezin/vaultwarden`。
 - 审查时上游 base：`0cefa4cca7c9f2a5579dd290f78193b543818c51`。
 - PR 元数据：open、未合并、mergeable=false、22 个文件、13 个提交。
-- 候选稳定基线：`1.37.3`，官方发布日期 2026-09-13。
+- 审查时候选稳定基线：`1.37.3`，官方发布日期 2026-09-13。当前 main 已合入上游 `1.37.4`。
 
 ## 结论
 
@@ -75,7 +75,7 @@
 
 两个原生 runner：ubuntu-24.04 (amd64)、ubuntu-24.04-arm (arm64)。各自构建和测试，通过后合成多架构 manifest。仅可信分支 push 发布候选；pull_request 不登录 registry，不推镜像，不使用 pull_request_target。Action 版本引用上游稳定版工作流中的完整 SHA。正式 latest 通过独立的人工提升工作流指向已验证 digest，不重新构建。
 
-CI 中的迁移测试只使用官方 1.37.3 初始化的合成空库和哨兵文件；它不证明真实密码库内容、附件、组织数据、2FA、恢复流程或 PRF 解密正常。
+CI 中的迁移测试只使用官方 1.37.4 初始化的合成空库和哨兵文件；它不证明真实密码库内容、附件、组织数据、2FA、恢复流程或 PRF 解密正常。
 
 ## 后续维护
 
@@ -89,9 +89,9 @@ CI 中的迁移测试只使用官方 1.37.3 初始化的合成空库和哨兵文
 - 固定注册实现：https://github.com/RaphaelRoumezin/vaultwarden/blob/f7f2007f7bc0de870cb2d482467ab36072e3eed5/src/api/core/webauthn.rs
 - 固定凭据模型：https://github.com/RaphaelRoumezin/vaultwarden/blob/f7f2007f7bc0de870cb2d482467ab36072e3eed5/src/db/models/webauthn_credential.rs
 - 固定密钥轮换：https://github.com/RaphaelRoumezin/vaultwarden/blob/f7f2007f7bc0de870cb2d482467ab36072e3eed5/src/api/core/accounts.rs
-- 上游稳定发布：https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.3
-- 上游 Alpine Dockerfile：https://github.com/dani-garcia/vaultwarden/blob/1.37.3/docker/Dockerfile.alpine
-- 上游 release workflow：https://github.com/dani-garcia/vaultwarden/blob/1.37.3/.github/workflows/release.yml
+- 上游稳定发布：https://github.com/dani-garcia/vaultwarden/releases/tag/1.37.4
+- 上游 Alpine Dockerfile：https://github.com/dani-garcia/vaultwarden/blob/1.37.4/docker/Dockerfile.alpine
+- 上游 release workflow：https://github.com/dani-garcia/vaultwarden/blob/1.37.4/.github/workflows/release.yml
 - webauthn-rs 0.5.5 文档（检索时 latest 指向该版本）：https://docs.rs/webauthn-rs/latest/webauthn_rs/struct.Webauthn.html
 - Docker 多平台构建官方文档：https://docs.docker.com/build/ci/github-actions/multi-platform/
 
@@ -107,7 +107,7 @@ CI 中的迁移测试只使用官方 1.37.3 初始化的合成空库和哨兵文
 
 ### 仍待后续
 
-- **合入 / rebase Vaultwarden 1.37.4+**（含安全修复）：按计划单独做，本次未动。
+- **合入 Vaultwarden 1.37.4**：已合入 main（保留 `PASSKEY_LOGIN_ALLOWED`、一次性 WebAuthn challenge、每用户最多 5 个登录 passkey、PRF 轮换、UV Required）。镜像 smoke 仍只覆盖合成库。
 - **多实例**：挑战表 + 进程内 mutex 仍非分布式；官方用 distributed cache 标 challenge 已用。多副本共库前不要上线。
 - 端到端：真实 Web Vault / Chromium 扩展上的注册、登录、PRF 解锁、带 passkeyUnlockData 的密钥轮换验收（见 `E2E-CHECKLIST.md`）。
 - 组织级 Require SSO / Trusted Devices / Key Connector 等策略与官方完整 org policy 仍非一一对应（当前为 `PASSKEY_LOGIN_ALLOWED` + `SSO_ONLY`）。

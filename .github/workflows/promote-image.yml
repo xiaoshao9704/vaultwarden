@@ -34,7 +34,7 @@ jobs:
       SOURCE_COMMIT: ${{ inputs.source_commit }}
       VALIDATION: ${{ inputs.validation }}
       IMAGE: ghcr.io/xiaoshao9704/vaultwarden
-      BASE_VERSION: "1.37.3"
+      BASE_VERSION: "1.37.4"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:

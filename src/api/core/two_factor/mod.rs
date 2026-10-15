@@ -70,13 +70,7 @@ pub fn is_twofactor_provider_usable(provider_type: &TwoFactorType, provider_data
 }
 
 pub fn routes() -> Vec<Route> {
-    let mut routes = routes![
-        get_twofactor,
-        get_recover,
-        disable_twofactor,
-        disable_twofactor_put,
-        get_device_verification_settings,
-    ];
+    let mut routes = routes![get_twofactor, get_recover, disable_twofactor, get_device_verification_settings];
 
     routes.append(&mut authenticator::routes());
     routes.append(&mut duo::routes());
@@ -135,7 +129,7 @@ struct DisableTwoFactorData {
     r#type: NumberOrString,
 }
 
-#[post("/two-factor/disable", data = "<data>")]
+#[put("/two-factor/disable", data = "<data>")]
 async fn disable_twofactor(data: Json<DisableTwoFactorData>, headers: Headers, conn: DbConn) -> JsonResult {
     let data: DisableTwoFactorData = data.into_inner();
     let user = headers.user;
@@ -166,11 +160,6 @@ async fn disable_twofactor(data: Json<DisableTwoFactorData>, headers: Headers, c
         "type": type_,
         "object": "twoFactorProvider"
     })))
-}
-
-#[put("/two-factor/disable", data = "<data>")]
-async fn disable_twofactor_put(data: Json<DisableTwoFactorData>, headers: Headers, conn: DbConn) -> JsonResult {
-    disable_twofactor(data, headers, conn).await
 }
 
 pub async fn enforce_2fa_policy(
